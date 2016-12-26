@@ -45,7 +45,6 @@ class  NeuralAgent():
             self.latencies += latencies/N_runs
             #call reset() to reset Q-values and latencies, ie forget all he learnt 
             # self.reset()
-            print(self.weights)
         
         return self.latencies
 
@@ -69,7 +68,8 @@ class  NeuralAgent():
         self.activations = np.zeros((self.n_neurons,self.n_neurons))
         self.weights = np.zeros((3,self.n_neurons,self.n_neurons)) # 3 because 3 outputs neurons_pos
 
-        #self.e = list()
+        #Elegibility
+        self.e = np.zeros((3,self.n_neurons,self.n_neurons))
         
         # list that contains the times it took the agent to reach the target for all trials
         # serves to track the progress of learning
@@ -109,8 +109,12 @@ class  NeuralAgent():
         Options:
         visual: If 'visualize' is 'True', show the time course of the trial graphically
         """
+        # reset the mountain_car
+        self.mountain_car.reset()
+
         # choose the initial position
         self.pos = np.random.uniform(-130, -50)
+        self.pos_old = None
         self.vel = np.random.uniform(-5,5)
         
         print("Starting trial at position ({0},{1})".format(self.pos,self.vel))
@@ -127,10 +131,13 @@ class  NeuralAgent():
         
             latency = latency + 1
 
+        print(self.weights.sum(axis=1).sum(axis=1))
+        print(latency)
         return latency
 
 
     def _arrived(self):
+        #if self.pos_old != None:
         return (self.pos>0) #Exit condition.
 
 
@@ -146,7 +153,7 @@ class  NeuralAgent():
         """
         self.action_old = self.action
         self.activations_old = self.activations
-        self.actiavations = np.exp(-(np.square(self.pos - self.pos_grid)/self.sigma_pos)-(np.square(self.vel - self.vel_grid)/self.sigma_vel))
+        self.activations = np.exp(-(np.square(self.pos - self.pos_grid)/self.sigma_pos)-(np.square(self.vel - self.vel_grid)/self.sigma_vel))
 
         self.Q = np.multiply(self.weights, self.activations).sum(axis=1).sum(axis=1)
         probabilities = self.Softmax(self.Q)
@@ -169,22 +176,17 @@ class  NeuralAgent():
         """
         Update the current estimate of the Q-values / weights, according to SARSA.
         """
-        # update the eligibility trace
-        # self.e = self.lambda_eligibility * self.e
-        # self.e.append(self.action_old, self.pos_old, self.vel_old] += 1.
         
         # update the weights
         if self.action_old != None:
+            
             q_old = np.multiply(self.weights, self.activations_old).sum(axis=1).sum(axis=1)
             q_new = np.multiply(self.weights, self.activations).sum(axis=1).sum(axis=1)
-            delta_t = self.mountain_car.R - (q_old - self.gamma * q_new)
-            delta_weights = self.eta * delta_t
-
-
-    
-
-
-
+            delta_t = self.mountain_car.R - (q_old[self.action_old] - self.gamma * q_new[self.action])
+            self.e_old = self.e
+            self.e[self.action_old] = self.gamma * self.lambda_eligibility * self.e_old[self.action_old] + self.activations_old
+            delta_weights = self.eta * delta_t * self.e[self.action_old]
+            self.weights[self.action_old] += delta_weights
 
 
 
@@ -224,3 +226,18 @@ class  NeuralAgent():
             if self.mountain_car.R > 0.0:
                 print ("\rreward obtained at t = ", self.mountain_car.t)
                 break
+
+if __name__ == "__main__":
+    
+    n_neurons = 20 # Actually a n_neuros x n_neurons grid
+    tau = 1 #Exploration temperature parameter
+    eta = 0.1 #Learning rate
+    gamma = 0.95 #Reward factor
+    lambda_eligibility = 0.95 #elegibility decay
+    a = NeuralAgent(n_neurons,tau,eta,gamma,lambda_eligibility)
+
+    N_trials = 20
+    N_runs=1
+    max_steps = 10000 #Save stop if not working well
+    latencies = a.run(N_trials,N_runs,max_steps)
+    print(latencies)
