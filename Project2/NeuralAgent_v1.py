@@ -16,6 +16,8 @@ class  NeuralAgent():
         self.n_neurons = n_neurons
         self.tau = tau
         self.lambda_eligibility = lambda_eligibility
+        self.gamma = gamma
+        self.eta = eta
 
         # Defines the neural lattice
         self.neurons_pos = np.linspace(-150,30,n_neurons)
@@ -33,25 +35,28 @@ class  NeuralAgent():
 
 
 
-    def run(self,N_trials=10,N_runs=1,max_steps):     # Change N_runs and Reset when doing 10 agents run!
-        self.latencies = zeros(N_trials)
+    def run(self,N_trials=10,N_runs=1,max_steps=1000000):     # Change N_runs and Reset when doing 10 agents run!
+        self.latencies = np.zeros(N_trials)
         
         for run in range(N_runs):
             self.mountain_car.reset()
             self._init_run()
-            latencies = self._learn_run(N_trials=N_trials,max_steps)
+            latencies = self._learn_run(N_trials=N_trials,max_steps=max_steps)
             self.latencies += latencies/N_runs
             #call reset() to reset Q-values and latencies, ie forget all he learnt 
-            self.reset()
+            # self.reset()
+            print(self.weights)
+        
+        return self.latencies
 
     def reset(self):
         """
-        Reset the Q-values (and the latency_list).
+        Reset the weights (and the latency_list).
         
         Instant amnesia -  the agent forgets everything he has learned before    
         """
         self.mountain_car.reset()
-        self.weights = np.zeros((3,n_neurons,n_neurons))
+        self.weights = np.zeros((3,self.n_neurons,self.n_neurons))
         self.latency_list = []
 
     def _init_run(self):
@@ -61,11 +66,10 @@ class  NeuralAgent():
         # initialize the Q-values and the eligibility trace
 
         #Activations & Weights
-        self.activations = np.zeros((n_neurons,n_neurons))
-        self.weights = np.zeros((3,n_neurons,n_neurons)) # 3 because 3 outputs neurons
-        # self.Q = 
+        self.activations = np.zeros((self.n_neurons,self.n_neurons))
+        self.weights = np.zeros((3,self.n_neurons,self.n_neurons)) # 3 because 3 outputs neurons_pos
 
-        self.e = np.zeros((3,n_neurons,n_neurons))
+        #self.e = list()
         
         # list that contains the times it took the agent to reach the target for all trials
         # serves to track the progress of learning
@@ -76,8 +80,9 @@ class  NeuralAgent():
         self.vel = None
         self.action = None
 
-     def _learn_run(self,N_trials=10,max_steps=1000):
-            """
+
+    def _learn_run(self,N_trials=10,max_steps=1000000):
+        """
         Run a learning period consisting of N_trials trials. 
         
         Options:
@@ -93,7 +98,7 @@ class  NeuralAgent():
             latency = self._run_trial(max_steps)
             self.latency_list.append(latency)
 
-        return array(self.latency_list)
+        return np.array(self.latency_list)
 
 
     def _run_trial(self,max_steps):
@@ -108,17 +113,17 @@ class  NeuralAgent():
         self.pos = np.random.uniform(-130, -50)
         self.vel = np.random.uniform(-5,5)
         
-        print("Starting trial at position ({0},{1})".format(self.pos,self.vel)
+        print("Starting trial at position ({0},{1})".format(self.pos,self.vel))
 
         # initialize the latency (time to reach the target) for this trial
-        latency = 0.
-            
+        latency = 0
+
         # run the trial
         self._choose_action()
         while (not self._arrived()) and (latency<max_steps):
             self._update_state()
             self._choose_action()    
-            self._update_Q()
+            self._update_weights()
         
             latency = latency + 1
 
@@ -144,7 +149,7 @@ class  NeuralAgent():
         self.actiavations = np.exp(-(np.square(self.pos - self.pos_grid)/self.sigma_pos)-(np.square(self.vel - self.vel_grid)/self.sigma_vel))
 
         self.Q = np.multiply(self.weights, self.activations).sum(axis=1).sum(axis=1)
-        probabilities = Softmax(self.Q)
+        probabilities = self.Softmax(self.Q)
 
         self.action = np.random.choice([0,1,2],size=1,p=probabilities)
         
@@ -160,19 +165,23 @@ class  NeuralAgent():
         self.vel=self.mountain_car.x_d
 
 
-    def _update_Q(self):
+    def _update_weights(self):
         """
         Update the current estimate of the Q-values / weights, according to SARSA.
         """
         # update the eligibility trace
-        self.e = self.lambda_eligibility * self.e
-        self.e[self.pos_old, self.vel_old,self.action_old] += 1.
+        # self.e = self.lambda_eligibility * self.e
+        # self.e.append(self.action_old, self.pos_old, self.vel_old] += 1.
         
-        # update the Q-values
+        # update the weights
         if self.action_old != None:
-            self.Q +=  self.eta * self.e * (self.mountain_car.R - ( self.Q[self.pos_old,self.vel_old,self.action_old] - self.gamma * self.Q[self.pos, self.vel, self.action] ))
+            q_old = np.multiply(self.weights, self.activations_old).sum(axis=1).sum(axis=1)
+            q_new = np.multiply(self.weights, self.activations).sum(axis=1).sum(axis=1)
+            delta_t = self.mountain_car.R - (q_old - self.gamma * q_new)
+            delta_weights = self.eta * delta_t
 
 
+    
 
 
 
@@ -201,8 +210,9 @@ class  NeuralAgent():
             #print('\rt =', self.mountain_car.t)
             #sys.stdout.flush()
             
-            # choose a random action
-            self.mountain_car.apply_force(np.random.randint(3) - 1)
+            # choose action
+            self._choose_action()
+            self.mountain_car.apply_force(self.action)
             # simulate the timestep
             self.mountain_car.simulate_timesteps(100, 0.01)
 
