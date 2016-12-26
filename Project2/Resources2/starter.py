@@ -27,9 +27,10 @@ class DummyAgent():
         
         # prepare for the visualization
         plb.ion()
+        plb.pause(0.0001)
         mv = mountaincar.MountainCarViewer(self.mountain_car)
         mv.create_figure(n_steps, n_steps)
-        plb.draw()
+        plb.show()
             
         # make sure the mountain-car is reset
         self.mountain_car.reset()
@@ -45,7 +46,8 @@ class DummyAgent():
 
             # update the visualization
             mv.update_figure()
-            plb.draw()            
+            plb.show()
+            plb.pause(0.0001)           
             
             # check for rewards
             if self.mountain_car.R > 0.0:
