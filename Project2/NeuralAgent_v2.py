@@ -202,14 +202,14 @@ class  NeuralAgent():
         # update the weights
         if self.action_old != None:
             delta_energy = self.energy-self.energy_old #reward for improving energy
-            delta_t = self.mountain_car.R*100 + delta_energy/100 - self.latency/100 - (self.q_old[self.action_old] - self.gamma * self.Q[self.action])
+            delta_t = delta_energy - (self.q_old[self.action_old] - self.gamma * self.Q[self.action])
             self.e_old = self.e
 
             # self.e[self.action_old] = self.gamma * self.lambda_eligibility * self.e_old[self.action_old] + self.activations_old
             self.e = self.gamma * self.lambda_eligibility * self.e_old 
             self.e[self.action_old] += self.activations_old
             
-            delta_weights = self.eta * delta_t * self.e[self.action_old]
+            delta_weights = self.eta * delta_t * self.e[self.action_old] # * (100/(self.latency+100))
             self.weights[self.action_old] += delta_weights
 
 

@@ -55,9 +55,6 @@ class MountainCar():
         # set x_dot to range [-5; 5]
         self.x_d = 10.0 * np.random.rand() - 5.0
 
-        # set energy
-        self.energy = self.m * (self.g * self._h(self.x) + 0.5 * (1 + self._h_prime(self.x)**2) * self.x_d**2)
-
         # reset reward
         self.R = 0.0
         # reset time
@@ -103,8 +100,8 @@ class MountainCar():
         """Return the total energy of the car with variable x and x_d.
         """
         # note that v and x dot are not the same: v includes the y direction!
-        self.energy = self.m * (self.g * self._h(x) + 0.5 * (1 + self._h_prime(x)**2) * x_d**2)
-        return self.energy 
+        energy = self.m * (self.g * self._h(x) + 0.5 * (1 + self._h_prime(x)**2) * x_d**2)
+        return energy 
 
     def simulate_timesteps(self, n = 1, dt = 0.1):
         """Simulate the car dynamics for n timesteps of length dt.
