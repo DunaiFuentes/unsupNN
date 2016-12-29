@@ -76,6 +76,7 @@ class  NeuralAgent():
         # initialize the state and action variables
         self.pos = None
         self.vel = None
+        self.energy = None
         self.action = None
 
 
@@ -115,6 +116,8 @@ class  NeuralAgent():
         self.pos_old = None
         self.vel = self.mountain_car.x_d
         self.vel_old = None
+        self.energy = self.mountain_car._energy(self.pos,self.vel)
+        self.energy_old = None
 
         # reset activations and Elegibility
         self.activations = np.zeros((self.n_neurons,self.n_neurons))
@@ -124,12 +127,12 @@ class  NeuralAgent():
         print("Starting trial at position ({0},{1})".format(self.pos,self.vel))
 
         # initialize the latency (time to reach the target) for this trial
-        latency = 0
+        self.latency = 0
 
         # run the trial
         self._choose_action()
 
-        while (not self._arrived()) and (latency<max_steps):
+        while (not self._arrived()) and (self.latency<max_steps):
 
             self._update_state()
 
@@ -137,12 +140,12 @@ class  NeuralAgent():
             
             self._update_weights()
             
-            latency = latency + 1
+            self.latency = self.latency + 1
 
 
         print(self.weights.sum(axis=1).sum(axis=1))
-        print(latency)
-        return latency
+        print(self.latency)
+        return self.latency
 
 
     def _arrived(self):
@@ -177,10 +180,15 @@ class  NeuralAgent():
         self.q_old = self.Q
         self.pos_old = self.pos
         self.vel_old = self.vel
+        self.energy_old = self.energy
+
         self.mountain_car.apply_force(self.action)
         self.mountain_car.simulate_timesteps(100, 0.01)
+
         self.pos=self.mountain_car.x
         self.vel=self.mountain_car.x_d
+        self.energy = self.mountain_car._energy(self.pos,self.vel)
+
         self.activations_old = self.activations
         self.activations = np.exp(-(np.square(self.pos - self.pos_grid)/(self.sigma_pos ** 2))-(np.square(self.vel - self.vel_grid)/(self.sigma_vel ** 2)))
         self.Q = np.multiply(self.weights, self.activations).sum(axis=1).sum(axis=1)
@@ -193,8 +201,8 @@ class  NeuralAgent():
 
         # update the weights
         if self.action_old != None:
-            #self.mountain_car.energy/10000  
-            delta_t = self.mountain_car.R*10 - (self.q_old[self.action_old] - self.gamma * self.Q[self.action])
+            delta_energy = self.energy-self.energy_old #reward for improving energy
+            delta_t = self.mountain_car.R*100 + delta_energy/100 - self.latency/100 - (self.q_old[self.action_old] - self.gamma * self.Q[self.action])
             self.e_old = self.e
 
             # self.e[self.action_old] = self.gamma * self.lambda_eligibility * self.e_old[self.action_old] + self.activations_old
@@ -213,7 +221,19 @@ class  NeuralAgent():
         ----------
         n_steps -- number of steps to simulate for
         """
+
+        print('Simulating for:')
+        print(self.weights.sum(axis=1).sum(axis=1))
         
+        # Initialize
+        self.pos = None
+        self.vel = None
+        self.energy = None
+        self.action = None
+        self.activations = np.zeros((self.n_neurons,self.n_neurons))
+        self.Q = np.multiply(self.weights, self.activations).sum(axis=1).sum(axis=1)
+
+
         # prepare for the visualization
         plb.ion()
         mv = mountaincar.MountainCarViewer(self.mountain_car)
@@ -230,9 +250,7 @@ class  NeuralAgent():
             
             # choose action
             self._choose_action()
-            self.mountain_car.apply_force(self.action)
-            # simulate the timestep
-            self.mountain_car.simulate_timesteps(100, 0.01)
+            self._update_state()
 
             # update the visualization
             mv.update_figure()
