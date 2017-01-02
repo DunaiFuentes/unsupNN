@@ -156,10 +156,9 @@ class  NeuralAgent():
         Compute softmax values for each sets of scores in x.
         """
         x = x/self.tau
-        e_x = np.exp(x )
+        e_x = np.exp(x - np.max(x))
         probs = e_x / e_x.sum()
-        print(e_x)
-        print(probs)
+        # print(probs)
         return probs
         
 
