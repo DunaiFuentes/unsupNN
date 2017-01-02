@@ -43,8 +43,8 @@ class  NeuralAgent():
             self._init_run()
             latencies = self._learn_run(N_trials,max_steps)
             self.latencies += latencies/N_runs
-            #call reset() to reset Q-values and latencies, ie forget all he learnt 
-            # self.reset()
+            #call reset() to reset Q-values and latencies, ie forget all he learnt
+            self.reset()
         
         return self.latencies
 
@@ -55,7 +55,6 @@ class  NeuralAgent():
         Instant amnesia -  the agent forgets everything he has learned before    
         """
         self.mountain_car.reset()
-        self.weights = np.zeros((3,self.n_neurons,self.n_neurons))
         self.latency_list = []
 
     def _init_run(self):
@@ -65,11 +64,10 @@ class  NeuralAgent():
         # initialize the Q-values and the eligibility trace
 
         #Activations & Weights
-        self.activations = np.zeros((self.n_neurons,self.n_neurons))
         self.weights = np.zeros((3,self.n_neurons,self.n_neurons)) # 3 because 3 outputs neurons_pos
+        self.activations = np.zeros((self.n_neurons,self.n_neurons))
+        self.Q = np.multiply(self.weights, self.activations).sum(axis=1).sum(axis=1)
 
-        #Eligibility
-        self.e = np.zeros((3,self.n_neurons,self.n_neurons))
         
         # list that contains the times it took the agent to reach the target for all trials
         # serves to track the progress of learning
@@ -113,39 +111,38 @@ class  NeuralAgent():
         self.mountain_car.reset()
 
         # choose the initial position
-        self.pos = np.random.uniform(-130, -50)
+        self.pos = self.mountain_car.x #np.random.uniform(-130, -50)
         self.pos_old = None
-        self.vel = np.random.uniform(-5,5)
-        
+        self.vel = self.mountain_car.x_d #np.random.uniform(-5,5)
+        # reset activations and Elegibility
+        self.activations = np.zeros((self.n_neurons,self.n_neurons))
         self.e = np.zeros((3,self.n_neurons,self.n_neurons))
+        
+        # self.e = np.zeros((3,self.n_neurons,self.n_neurons))
 
 
         print("Starting trial at position ({0},{1})".format(self.pos,self.vel))
 
         # initialize the latency (time to reach the target) for this trial
-        latency = 0
+        self.latency = 0
 
         # run the trial
         self._choose_action()
-        val = 0.0
-        t2 = time.time()
-        while (not self._arrived()) and (latency<max_steps):
-            t1 = time.time()
+
+        while (not self._arrived()) and (self.latency<max_steps):
+
             self._update_state()
-            val = val + time.time() -t1
 
             self._choose_action()
             
-   
             self._update_weights()
             
-            latency = latency + 1
+            self.latency = self.latency + 1
 
-        print(val)
-        print(time.time() - t2)
+
         print(self.weights.sum(axis=1).sum(axis=1))
-        print(latency)
-        return latency
+        print(self.latency)
+        return self.latency
 
 
     def _arrived(self):
@@ -153,9 +150,16 @@ class  NeuralAgent():
         return (self.pos>0) #Exit condition.
 
 
-    def Softmax(self,Q):
-        expo = np.exp(Q/self.tau)
-        probs = expo/expo.sum()
+    def Softmax(self,x):
+        """
+        Robust (normalized) verstion of Softmax
+        Compute softmax values for each sets of scores in x.
+        """
+        x = x/self.tau
+        e_x = np.exp(x )
+        probs = e_x / e_x.sum()
+        print(e_x)
+        print(probs)
         return probs
         
 
@@ -163,19 +167,16 @@ class  NeuralAgent():
         """
         Softmax on Q-values and random chosing
         """
+        probabilities = self.Softmax(self.Q)
+
         self.action_old = self.action
-        self.activations_old = self.activations
-        self.activations = np.exp(-np.square((self.pos - self.pos_grid)/self.sigma_pos)-np.square((self.vel - self.vel_grid)/self.sigma_vel))
-
-        Q = np.multiply(self.weights, self.activations).sum(axis=1).sum(axis=1)
-        probabilities = self.Softmax(Q)
-
         self.action = np.random.choice([0,1,2],size=1,p=probabilities)
         
     def _update_state(self):
         '''
         Performs the current action
         '''
+        self.q_old = self.Q
         self.pos_old = self.pos
         self.vel_old = self.vel
         self.mountain_car.apply_force(self.action)
@@ -183,6 +184,9 @@ class  NeuralAgent():
         self.pos=self.mountain_car.x
         self.vel=self.mountain_car.x_d
 
+        self.activations_old = self.activations
+        self.activations = np.exp(-(np.square(self.pos - self.pos_grid)/(self.sigma_pos ** 2))-(np.square(self.vel - self.vel_grid)/(self.sigma_vel ** 2)))
+        self.Q = np.multiply(self.weights, self.activations).sum(axis=1).sum(axis=1)
 
     def _update_weights(self):
         """
@@ -192,17 +196,19 @@ class  NeuralAgent():
         # update the weights
         if self.action_old != None:
             
-            q_old = np.multiply(self.weights, self.activations_old).sum(axis=1).sum(axis=1)
-            q_new = np.multiply(self.weights, self.activations).sum(axis=1).sum(axis=1)
-            delta_t = self.mountain_car.R - (q_old[self.action_old] - self.gamma * q_new[self.action])
+            delta_t = self.mountain_car.R - (self.q_old[self.action_old] - self.gamma * self.Q[self.action])
             self.e_old = self.e
 
 
             self.e = self.gamma * self.lambda_eligibility * self.e_old 
             self.e[self.action_old] += self.activations_old
 
+            
             delta_weights = self.eta * delta_t * self.e
             self.weights += delta_weights
+            # print(self.Q)
+            # print(self.weights.sum(axis=1).sum(axis=1))
+            # print("action: {}".format(self.action))
 
 
 
@@ -213,7 +219,19 @@ class  NeuralAgent():
         ----------
         n_steps -- number of steps to simulate for
         """
+
+        print('Simulating for:')
+        print(self.weights.sum(axis=1).sum(axis=1))
         
+        # Initialize
+        self.pos = None
+        self.vel = None
+        self.energy = None
+        self.action = None
+        self.activations = np.zeros((self.n_neurons,self.n_neurons))
+        self.Q = np.multiply(self.weights, self.activations).sum(axis=1).sum(axis=1)
+
+
         # prepare for the visualization
         plb.ion()
         mv = mountaincar.MountainCarViewer(self.mountain_car)
@@ -230,9 +248,7 @@ class  NeuralAgent():
             
             # choose action
             self._choose_action()
-            self.mountain_car.apply_force(self.action)
-            # simulate the timestep
-            self.mountain_car.simulate_timesteps(100, 0.01)
+            self._update_state()
 
             # update the visualization
             mv.update_figure()
