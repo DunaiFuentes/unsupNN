@@ -18,7 +18,7 @@ class  NeuralAgent():
         self.lambda_eligibility = lambda_eligibility
         self.gamma = gamma
         self.eta = eta
-
+        self.force = [0,1,-1]
         # Defines the neural lattice
         self.neurons_pos = np.linspace(-150,30,n_neurons)
         print(self.neurons_pos)
@@ -158,7 +158,6 @@ class  NeuralAgent():
         x = x/self.tau
         e_x = np.exp(x - np.max(x))
         probs = e_x / e_x.sum()
-        # print(probs)
         return probs
         
 
@@ -178,7 +177,8 @@ class  NeuralAgent():
         self.q_old = self.Q
         self.pos_old = self.pos
         self.vel_old = self.vel
-        self.mountain_car.apply_force(self.action)
+
+        self.mountain_car.apply_force(self.force[self.action])
         self.mountain_car.simulate_timesteps(100, 0.01)
         self.pos=self.mountain_car.x
         self.vel=self.mountain_car.x_d
