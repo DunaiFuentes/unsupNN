@@ -19,7 +19,6 @@ class  NeuralAgent():
         self.gamma = gamma
         self.eta = eta
 
-        self.force = [0,1,-1]
         # Defines the neural lattice
         self.neurons_pos = np.linspace(-150,30,n_neurons)
         print(self.neurons_pos)
@@ -46,7 +45,6 @@ class  NeuralAgent():
         self.activations = np.zeros((self.n_neurons,self.n_neurons))
         self.Q = np.multiply(self.weights, self.activations).sum(axis=1).sum(axis=1)
 
-        self.vector_field = []
         
         # list that contains the times it took the agent to reach the target for all trials
         # serves to track the progress of learning
@@ -70,8 +68,7 @@ class  NeuralAgent():
             self.latencies += latencies/N_runs
             #call reset() to reset Q-values and latencies, ie forget all he learnt
         
-
-        return self.latencies,self.vector_field
+        return self.latencies
 
 
     def _learn_run(self,N_trials=10,max_steps=1000000):
@@ -95,8 +92,7 @@ class  NeuralAgent():
             else:
                 self.weights_multiplex = self.weights
                     
-            if trial in [0,1,5,20,N_trials-1]:
-                self.vector_field.append(self.generate_vector_field())
+
             print(self.weights.sum(axis=1).sum(axis=1)) # To check evolution of the weights
 
 
@@ -179,10 +175,9 @@ class  NeuralAgent():
         self.vel_old = self.vel
         self.energy_old = self.energy
 
-        self.mountain_car.apply_force(self.force[self.action])
+        self.mountain_car.apply_force(self.action-1)
         self.mountain_car.simulate_timesteps(100, 0.01)
 
-        self.force = [0,1,-1]
         self.pos=self.mountain_car.x
         self.vel=self.mountain_car.x_d
         self.energy = self.mountain_car._energy(self.pos,self.vel)
@@ -205,27 +200,11 @@ class  NeuralAgent():
 
             self.e_old = self.e
             self.e = self.gamma * self.lambda_eligibility * self.e_old 
-            self.e[self.action_old] += self.activations_old
+            self.e[self.action_old] = self.e[self.action_old] + self.activations_old
             
             delta_weights = self.eta * delta_t * self.e
             self.weights_multiplex += delta_weights
 
-
-    def generate_vector_field(self):
-        x = np.linspace(-150,30,self.n_neurons*10)
-        x_dot  = np.linspace(-15,15,self.n_neurons*10)
-        direction = np.zeros((self.n_neurons*10,self.n_neurons*10))
-
-        for pos_indx,pos in enumerate(x):
-            for vel_indx,vel  in enumerate(x_dot):
-                field_activations = np.exp(-(np.square(pos - self.pos_grid)/(self.sigma_pos ** 2))
-                                                    -(np.square(vel - self.vel_grid)/(self.sigma_vel ** 2)))
-                Q = np.multiply(self.weights_multiplex, field_activations).sum(axis=1).sum(axis=1)
-                # print("Q: {}".format(Q))
-                direction[pos_indx,vel_indx] = self.force[np.argmax(Q)]
-                # print("indx: {}".format(direction[pos_indx,vel_indx]))
-
-        return direction
 
 
     def visualize_trial(self, n_steps, tau):
